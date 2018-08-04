@@ -7,7 +7,7 @@ local arg = ...
 local pfile = ""
 
 if arg==nil then
-   pfile = "../pcap/http.pcap"
+   pfile = "./pcap/http.pcap"
 else
    pfile = arg
 end
@@ -17,7 +17,7 @@ print("Loading " .. pfile )
 local ffi = require('ffi')
 local C = ffi.C
 
-local peafowl = ffi.load("../libdpi.so")
+local peafowl = ffi.load("./include/libdpi.so")
 local pcap = ffi.load("pcap")
 
 ffi.cdef([[
