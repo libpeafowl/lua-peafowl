@@ -12,7 +12,7 @@ else
    pfile = arg
 end
 
-print("Loading " ..pfile)
+print("Loading "..pfile)
 
 --*** Import the FFI lib
 local ffi = require('ffi')
@@ -32,19 +32,60 @@ ffi.cdef([[
 };
 
 pcap_t *pcap_open_offline(const char *fname, char *errbuf);
-
 void pcap_close(pcap_t *p);
-
 const uint8_t *pcap_next(pcap_t *p, struct pcap_pkthdr *h);
 
-dpi_library_state_t* dpi_init_stateful(u_int32_t size_v4,
-		                               u_int32_t size_v6,
-		                               u_int32_t max_active_v4_flows,
-		                               u_int32_t max_active_v6_flows);
+
+typedef void(dpi_flow_cleaner_callback)(void* flow_specific_user_data);
+
+typedef struct dpi_protocol{
+	uint8_t l4prot;
+	uint8_t l7prot;
+} dpi_protocol_t;
+
+struct library_state{
+  void *db4;
+  void *db6;
+
+  char udp_protocols_to_inspect[1];
+  char tcp_protocols_to_inspect[1];
+
+  char udp_active_callbacks[1];
+  char tcp_active_callbacks[1];
+
+  uint8_t udp_active_protocols;
+  uint8_t tcp_active_protocols;
+
+  uint16_t max_trials;
+
+  dpi_flow_cleaner_callback* flow_cleaner_callback;
+
+  void* http_callbacks;
+  void* http_callbacks_user_data;
+  void *ssl_callbacks;
+  void *ssl_callbacks_user_data;
+
+  uint8_t tcp_reordering_enabled:1;
+
+  void* ipv4_frag_state;
+  void* ipv6_frag_state;
+};
+typedef struct library_state dpi_library_state_t;
+
+typedef struct dpi_identification_result{
+	int8_t status;
+	dpi_protocol_t protocol;
+	void* user_flow_data;
+} dpi_identification_result_t;
+
+dpi_library_state_t* dpi_init_stateful(uint32_t size_v4,
+		                               uint32_t size_v6,
+		                               uint32_t max_active_v4_flows,
+		                               uint32_t max_active_v6_flows);
 
 dpi_identification_result_t dpi_stateful_identify_application_protocol(
 		         dpi_library_state_t* state, const unsigned char* pkt,
-		         u_int32_t length, u_int32_t current_time);
+		         uint32_t length, uint32_t current_time);
 
 void dpi_terminate(dpi_library_state_t *state);
 ]])
@@ -58,13 +99,14 @@ local fname = ffi.new("char[?]", #filename, filename)
 local errbuf = ffi.new("char[512]")
 
 -- Read pcap file
-local lhandle = pcap.pcap_open_offline(fname, errbuf)
-if handle == nil then
-   C.printf(errbuf)
+local lhandle = lpcap.pcap_open_offline(fname, errbuf)
+if lhandle == nil then
+   print("error buffer")
+   return
 end
 
 -- var for Peafowl init and inspection
-local lstate = peafowl.dpi_init_stateful(32767,32767,500000,500000) -- state = (typedef struct library_state ) dpi_library_state_t
+local lstate = lpeafowl.dpi_init_stateful(32767,32767,500000,500000) -- state = (typedef struct library_state ) dpi_library_state_t
 local lheader = ffi.new("struct pcap_pkthdr") -- header = struct pcap_pkthdr
 
 -- Inspect each packet
@@ -76,7 +118,7 @@ while (1) do
    -- convert to const unsigned char* (packet)
    -- convert header !!!!
    -- init from Peafowl
-   local lproto = peafowl.dpi_stateful_identify_application_protocol(lstate, lpacket, lheader, os.time()*1000)
+   local lproto = lpeafowl.dpi_stateful_identify_application_protocol(lstate, lpacket, lheader, os.time()*1000)
    print("PKT !")
    total_packets = total_packets + 1
 end
