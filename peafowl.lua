@@ -25,10 +25,10 @@ ffi.cdef([[
  typedef struct pcap pcap_t;
 
  struct pcap_pkthdr {
-  uint64_t ts_sec;         /* timestamp seconds */
-  uint64_t ts_usec;        /* timestamp microseconds */
-  uint32_t incl_len;       /* number of octets of packet saved in file */
-  uint32_t orig_len;       /* actual length of packet */
+    uint64_t ts_sec;
+    uint64_t ts_usec; 
+    uint32_t caplen; 
+    uint32_t len;    
 };
 
 pcap_t *pcap_open_offline(const char *fname, char *errbuf);
@@ -109,22 +109,24 @@ end
 local lstate = lpeafowl.dpi_init_stateful(32767,32767,500000,500000) -- state = (typedef struct library_state ) dpi_library_state_t
 local lheader = ffi.new("struct pcap_pkthdr") -- header = struct pcap_pkthdr
 
+local leth_offset = 14
+
 -- Inspect each packet
 local total_packets = 0
 while (1) do
    -- next pkt
    local lpacket = lpcap.pcap_next(lhandle, lheader)
-   if lpacket == nil then break end
-   -- convert to const unsigned char* (packet)
-   -- convert header !!!!
+   if lpacket == nil then
+      break
+   end
    -- init from Peafowl
-   local lproto = lpeafowl.dpi_stateful_identify_application_protocol(lstate, lpacket, lheader, os.time()*1000)
-   print("PKT !")
+   local lproto = lpeafowl.dpi_stateful_identify_application_protocol(lstate, lpacket, lheader.len-leth_offset, os.time()*1000)
+   print("PKT Received")
    total_packets = total_packets + 1
 end
-pcap.pcap_close(lhandle)
+lpcap.pcap_close(lhandle)
 
 -- Print results
-peafowl.dpi_terminate(lstate)
+lpeafowl.dpi_terminate(lstate)
 
 print("Total packets: "..total_packets)
