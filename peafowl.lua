@@ -120,8 +120,8 @@ while (1) do
       break
    end
    -- init from Peafowl
-   local lproto = lpeafowl.dpi_stateful_identify_application_protocol(lstate, lpacket, lheader.len-leth_offset, os.time()*1000)
-   print("PKT Received")
+   local lproto = lpeafowl.dpi_stateful_identify_application_protocol(lstate, lpacket+leth_offset, lheader.len-leth_offset, os.time()*1000)
+   print("PKT Received", "L4", lproto.protocol.l4prot, "L7", lproto.protocol.l7prot )
    total_packets = total_packets + 1
 end
 lpcap.pcap_close(lhandle)
