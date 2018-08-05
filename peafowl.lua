@@ -20,6 +20,11 @@ local ffi = require('ffi')
 local lpeafowl = ffi.load("./include/peafowl_lib/lib/libdpi.so")
 local lpcap = ffi.load("pcap")
 
+--*** Utils
+function ternary ( cond , T , F )
+    if cond then return T else return F end
+end
+
 --*** Declaration of functions to use inside ffi.cdef ***
 ffi.cdef([[
  typedef struct pcap pcap_t;
@@ -92,6 +97,7 @@ void dpi_terminate(dpi_library_state_t *state);
 
 -- Protocol names
 local L7PROTO = {"DNS","MDNS","DHCP","DHCPv6","NTP","SIP","RTP","SKYPE","HTTP","BGP","SMTP","POP3","SSL"}
+local DPI_NUM_UDP_PROTOCOLS = 8
 
 -- var for pcap read
 local filename = pfile
@@ -121,7 +127,7 @@ while (1) do
    end
    -- init from Peafowl
    local lproto = lpeafowl.dpi_stateful_identify_application_protocol(lstate, lpacket+leth_offset, lheader.len-leth_offset, os.time()*1000)
-   print("PKT Received", "L4", lproto.protocol.l4prot, "L7", lproto.protocol.l7prot )
+   print("PKT Received", "L4", lproto.protocol.l4prot, "L7", L7PROTO[ternary( lproto.protocol.l4prot == 6, lproto.protocol.l7prot+DPI_NUM_UDP_PROTOCOLS, lproto.protocol.l7prot)+1] )
    total_packets = total_packets + 1
 end
 lpcap.pcap_close(lhandle)
