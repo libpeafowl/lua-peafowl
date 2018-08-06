@@ -25,7 +25,7 @@ function ternary ( cond , T , F )
     if cond then return T else return F end
 end
 
---*** Declaration of functions to use inside ffi.cdef ***
+--*** Declaration of functions to use inside ffi.cdef
 ffi.cdef([[
  typedef struct pcap pcap_t;
 
@@ -39,7 +39,6 @@ ffi.cdef([[
 pcap_t *pcap_open_offline(const char *fname, char *errbuf);
 void pcap_close(pcap_t *p);
 const uint8_t *pcap_next(pcap_t *p, struct pcap_pkthdr *h);
-
 
 typedef void(dpi_flow_cleaner_callback)(void* flow_specific_user_data);
 
@@ -88,14 +87,17 @@ dpi_library_state_t* dpi_init_stateful(uint32_t size_v4,
 		                               uint32_t max_active_v4_flows,
 		                               uint32_t max_active_v6_flows);
 
-dpi_identification_result_t dpi_stateful_identify_application_protocol(
+dpi_identification_result_t dpi_get_protocol(
 		         dpi_library_state_t* state, const unsigned char* pkt,
 		         uint32_t length, uint32_t current_time);
+
+const char** const dpi_get_protocols_names();
 
 void dpi_terminate(dpi_library_state_t *state);
 ]])
 
 -- Protocol names
+local L4PROTO = {TCP = 6, UDP = 17}
 local L7PROTO = {"DNS","MDNS","DHCP","DHCPv6","NTP","SIP","RTP","SKYPE","HTTP","BGP","SMTP","POP3","SSL"}
 local DPI_NUM_UDP_PROTOCOLS = 8
 
@@ -103,6 +105,11 @@ local DPI_NUM_UDP_PROTOCOLS = 8
 local filename = pfile
 local fname = ffi.new("char[?]", #filename, filename)
 local errbuf = ffi.new("char[512]")
+
+-- counters for IP - TCP UDP
+local ip_counter = 0
+local tcp_counter = 0
+local udp_counter = 0
 
 -- Read pcap file
 local lhandle = lpcap.pcap_open_offline(fname, errbuf)
@@ -125,14 +132,46 @@ while (1) do
    if lpacket == nil then
       break
    end
-   -- init from Peafowl
-   local lproto = lpeafowl.dpi_stateful_identify_application_protocol(lstate, lpacket+leth_offset, lheader.len-leth_offset, os.time()*1000)
-   print("PKT Received", "L4", lproto.protocol.l4prot, "L7", L7PROTO[ternary( lproto.protocol.l4prot == 6, lproto.protocol.l7prot+DPI_NUM_UDP_PROTOCOLS, lproto.protocol.l7prot)+1] )
+
+   -- increment counters of pkts
    total_packets = total_packets + 1
+   
+   -- increment ip pkt count
+   ip_counter = ip_counter + 1
+   
+   -- inspection from Peafowl
+   local lproto = lpeafowl.dpi_get_protocol(lstate, lpacket+leth_offset, lheader.len-leth_offset, os.time()*1000)
+
+   -- increment tcp or udp pkt count
+   if lproto.protocol.l4prot == L4PROTO.TCP then -- TCP
+      tcp_counter = tcp_counter + 1
+      l4 = "TCP"
+   else
+      if lproto.protocol.l4prot == L4PROTO.UDP then -- UDP
+	 udp_counter = udp_counter + 1
+	 l4 = "UDP"
+      else
+	 l4 = "Unknown"
+      end
+   end
+
+   if(lproto.protocol.l7prot < #L7PROTO) then
+      l7 = L7PROTO[lproto.protocol.l7prot+1]
+   else
+      l7 = "Unknown"
+   end
+   
+   -- Print results
+   print(string.format("Protocol: %s %s %d", l4, l7, total_packets))
+   
 end
 lpcap.pcap_close(lhandle)
 
--- Print results
+-- terminate status
 lpeafowl.dpi_terminate(lstate)
 
-print("Total packets: "..total_packets)
+-- Print results
+print("Total number of packets in the pcap file: "..total_packets)
+print("Total number of ip packets: "..ip_counter)
+print("Total number of tcp packets: "..tcp_counter)
+print("Total number of udp packets: "..udp_counter)
