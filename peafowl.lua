@@ -40,6 +40,9 @@ pcap_t *pcap_open_offline(const char *fname, char *errbuf);
 void pcap_close(pcap_t *p);
 const uint8_t *pcap_next(pcap_t *p, struct pcap_pkthdr *h);
 
+
+typedef uint8_t dpi_l7_prot_id;
+
 typedef void(dpi_flow_cleaner_callback)(void* flow_specific_user_data);
 
 typedef struct dpi_protocol{
@@ -91,14 +94,13 @@ dpi_identification_result_t dpi_get_protocol(
 		         dpi_library_state_t* state, const unsigned char* pkt,
 		         uint32_t length, uint32_t current_time);
 
-const char** const dpi_get_protocols_names();
+const char* const dpi_get_protocol_string(dpi_l7_prot_id protocol);
 
 void dpi_terminate(dpi_library_state_t *state);
 ]])
 
 -- Protocol names
 local L4PROTO = {TCP = 6, UDP = 17}
-local L7PROTO = {"DNS","MDNS","DHCP","DHCPv6","NTP","SIP","RTP","SKYPE","HTTP","BGP","SMTP","POP3","SSL"}
 local DPI_NUM_UDP_PROTOCOLS = 8
 
 -- var for pcap read
@@ -154,15 +156,16 @@ while (1) do
 	 l4 = "Unknown"
       end
    end
-
-   if(lproto.protocol.l7prot < #L7PROTO) then
-      l7 = L7PROTO[lproto.protocol.l7prot+1]
-   else
-      l7 = "Unknown"
-   end
+   
+   -- "create" the l7_ID as a C type
+   local l7_ID = ffi.new("dpi_l7_prot_id")
+   l7_ID = lproto.protocol.l7prot
+   
+   -- call function to get protocol name
+   local L7 = ffi.string(lpeafowl.dpi_get_protocol_string(l7_ID))
    
    -- Print results
-   print(string.format("Protocol: %s %s %d", l4, l7, total_packets))
+   print(string.format("Protocol: %s %s %d", l4, L7, total_packets))
    
 end
 lpcap.pcap_close(lhandle)
