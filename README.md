@@ -16,3 +16,14 @@ make
 ```
 luajit peafowl.lua pcap/http.pcap
 ```
+
+
+-------------
+
+If you use Peafowl or Node-Peafowl for scientific purposes, please cite the following paper:
+
+```"Deep Packet Inspection on Commodity Hardware using FastFlow", M. Danelutto, L. Deri, D. De Sensi, M. Torquati```
+
+###### This Project is sponsored by [QXIP BV](http://qxip.net)
+
+
