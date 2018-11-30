@@ -17,7 +17,7 @@ print("Loading "..pfile)
 --*** Import the FFI lib
 local ffi = require('ffi')
 --*** Import the external library and assign it to a Lua variable
-local lpeafowl = ffi.load("./include/peafowl_lib/lib/libdpi.so")
+local lpeafowl = ffi.load("./include/peafowl_lib/build/src/libpeafowl.so")
 local lpcap = ffi.load("pcap")
 
 --*** Utils
