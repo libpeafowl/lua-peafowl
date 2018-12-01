@@ -17,6 +17,7 @@ print("Loading "..pfile)
 --*** Import the FFI lib
 local ffi = require('ffi')
 --*** Import the external library and assign it to a Lua variable
+ffi.include "./include//peafowl_lib/build/src/libpeafowl.so"
 local lpeafowl = ffi.load("./include/peafowl_lib/build/src/libpeafowl.so")
 local lpcap = ffi.load("pcap")
 
@@ -40,63 +41,147 @@ pcap_t *pcap_open_offline(const char *fname, char *errbuf);
 void pcap_close(pcap_t *p);
 const uint8_t *pcap_next(pcap_t *p, struct pcap_pkthdr *h);
 
+static pfwl_state_t* state;                  
+static pfwl_dissection_info_t dissection_info; 
+struct pcap_pkthdr* header;                
 
-typedef uint8_t dpi_l7_prot_id;
+int b_init()
+{
+  state = pfwl_init();
+  if(state == NULL) {
+      fprintf(stderr, "peafowl init ERROR\n");
+      return -1; // ERROR
+  }
+  return 0;
+}
 
-typedef void(dpi_flow_cleaner_callback)(void* flow_specific_user_data);
 
-typedef struct dpi_protocol{
-	uint8_t l4prot;
-	uint8_t l7prot;
-} dpi_protocol_t;
+pfwl_protocol_l2_t _convert_pcap_dlt(int link_type)
+{
+    return pfwl_convert_pcap_dlt(link_type);
+}
 
-struct library_state{
-  void *db4;
-  void *db6;
 
-  char udp_protocols_to_inspect[1];
-  char tcp_protocols_to_inspect[1];
+pfwl_status_t _dissect_from_L2(char* packet, uint32_t length,
+                               uint32_t timestamp, pfwl_protocol_l2_t datalink_type)
+{
+    return pfwl_dissect_from_L2(state, (const u_char*) packet,
+                                length, time(NULL),
+                                datalink_type, &dissection_info);
+}
 
-  char udp_active_callbacks[1];
-  char tcp_active_callbacks[1];
 
-  uint8_t udp_active_protocols;
-  uint8_t tcp_active_protocols;
+pfwl_status_t _dissect_from_L3(char* packet_fromL3, uint32_t length_fromL3,
+                               uint32_t timestamp)
+{
+    return pfwl_dissect_from_L3(state, (const u_char*) packet_fromL3,
+                                length_fromL3, time(NULL), &dissection_info);
+}
 
-  uint16_t max_trials;
 
-  dpi_flow_cleaner_callback* flow_cleaner_callback;
+pfwl_status_t _dissect_from_L4(char* packet_fromL4, uint32_t length_fromL4,
+                               uint32_t timestamp)
+{
+    return pfwl_dissect_from_L3(state, (const u_char*) packet_fromL4,
+                                length_fromL4, time(NULL), &dissection_info);
+}
 
-  void* http_callbacks;
-  void* http_callbacks_user_data;
-  void *ssl_callbacks;
-  void *ssl_callbacks_user_data;
 
-  uint8_t tcp_reordering_enabled:1;
+uint8_t _protocol_L7_enable(pfwl_protocol_l7_t protocol)
+{
+    return pfwl_protocol_l7_enable(state, protocol);
+}
 
-  void* ipv4_frag_state;
-  void* ipv6_frag_state;
-};
-typedef struct library_state dpi_library_state_t;
 
-typedef struct dpi_identification_result{
-	int8_t status;
-	dpi_protocol_t protocol;
-	void* user_flow_data;
-} dpi_identification_result_t;
+uint8_t _protocol_L7_disable(pfwl_protocol_l7_t protocol)
+{
+    return pfwl_protocol_l7_disable(state, protocol);
+}
 
-dpi_library_state_t* dpi_init_stateful(uint32_t size_v4,
-		                               uint32_t size_v6,
-		                               uint32_t max_active_v4_flows,
-		                               uint32_t max_active_v6_flows);
 
-dpi_identification_result_t dpi_get_protocol(
-		         dpi_library_state_t* state, const unsigned char* pkt,
-		         uint32_t length, uint32_t current_time);
+pfwl_protocol_l7_t _guess_protocol()
+{
+    return pfwl_guess_protocol(dissection_info);
+}
 
-const char* const dpi_get_protocol_string(dpi_l7_prot_id protocol);
 
-void dpi_terminate(dpi_library_state_t *state);
+char* _get_L7_protocol_name(pfwl_protocol_l7_t protocol)
+{
+    return pfwl_get_L7_protocol_name(protocol);
+}
+
+
+pfwl_protocol_l7_t _get_L7_protocol_id(char* string)
+{
+    return pfwl_get_L7_protocol_id(string);
+}
+
+
+char* _get_L7_from_L2(char* packet, struct pcap_pkthdr* header, int link_type)
+{
+    char* name = NULL;
+    pfwl_protocol_l2_t dlt = pfwl_convert_pcap_dlt(link_type);
+    pfwl_status_t status = pfwl_dissect_from_L2(state, (const u_char*) packet,
+                                                header->caplen, time(NULL), dlt, &dissection_info);
+
+    if(status >= PFWL_STATUS_OK) {
+        name = pfwl_get_L7_protocol_name(dissection_info.l7.protocol);
+        return name;
+    }
+    else return "ERROR";
+}
+
+
+uint8_t _field_add_L7(char* field)
+{
+    pfwl_field_id_t f = pfwl_get_L7_field_id(field);
+    return pfwl_field_add_L7(state, f);
+}
+
+
+uint8_t _field_remove_L7(char* field)
+{
+    pfwl_field_id_t f = pfwl_get_L7_field_id(field);
+    return pfwl_field_remove_L7(state, f);
+}
+
+
+uint8_t _set_protocol_accuracy_L7(pfwl_protocol_l7_t protocol,
+                                  pfwl_dissector_accuracy_t accuracy)
+{
+    return pfwl_set_protocol_accuracy_L7(state, protocol, accuracy);
+}
+
+
+int _field_present(char* field)
+{
+    pfwl_field_id_t f = pfwl_get_L7_field_id(field);
+    return dissection_info.l7.protocol_fields[f].present;
+}
+
+
+char* _field_string_get(char* field)
+{
+    pfwl_string_t string;
+    pfwl_field_id_t f = pfwl_get_L7_field_id(field);
+    pfwl_field_string_get(dissection_info.l7.protocol_fields, f, &string);
+    return string.value;
+}
+
+
+int _field_number_get(char* field)
+{
+    int64_t num;
+    pfwl_field_id_t f = pfwl_get_L7_field_id(field);
+    pfwl_field_number_get(dissection_info.l7.protocol_fields, f, &num);
+    return num;
+}
+
+void _terminate()
+{
+  pfwl_terminate(state);
+}
+
 ]])
 
 -- Protocol names
